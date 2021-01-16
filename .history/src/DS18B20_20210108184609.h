@@ -1,0 +1,133 @@
+#ifndef _INC_DS18B20
+#define _INC_DS18B20
+#define uchar unsigned char
+#define uint unsigned int
+#endif
+sbit DS18B20_pin = P2 ^ 4;
+uchar ds_id[8] ;
+void Delay_ds18b20(uint t) //专用超精确延时10us
+{
+    int i;
+    while (t--)
+    {
+        for (i = 0; i < 12; i++)
+            ;
+    }
+}
+
+uint int_ds18b20()
+{
+    int i;
+    DS18B20_pin = 0; //拉低总线，产生复位信号
+    i = 80;
+    while (i > 0)
+        i--;         //延时480~960us
+    DS18B20_pin = 1; //拉高总线
+    i = 4;
+    while (i > 0)
+        i--; //延时15~60us
+    while (DS18B20_pin)
+        ; //等待产生应答脉冲
+    i = 70;
+    while (i > 0)
+        i--; //延时至少480us
+}
+
+//向DS18B20写一个字节
+
+void Write_DS18B20(uint dat)
+{
+    int i, j;
+    bit testb;
+    for (j = 8; j > 0; j--)
+    {
+        testb = dat & 0x01;
+        dat = dat >> 1;
+        if (testb) //写1
+        {
+            DS18B20_pin = 0; //拉低总线，产生写时间隙
+            i++;             //延时大于1us
+            DS18B20_pin = 1; //拉高总线
+            i = 8;
+            while (i > 0)
+                i--; //延时至少60us，供DS18B20采样
+        }
+        else //写0
+        {
+            DS18B20_pin = 0; //拉低总线，产生写时间隙
+            i = 8;
+            while (i > 0)
+                i--;         //保持至少60us，供DS18B20采样
+            DS18B20_pin = 1; //拉高总线
+            i++;
+            i++;
+        }
+    }
+}
+
+//从DS18B20读取一个字节
+
+uchar Read_DS18B20()
+{
+    int i, j;
+    bit b; //定义存放接收到的1个字节
+    uchar i_b;
+    uchar rdbyte;
+    for (j = 8; j > 0; j--)
+    {
+        DS18B20_pin = 0; //拉低总线，产生读时隙
+        i++;             //延时大于1us
+        DS18B20_pin = 1; //释放总线
+        i++;
+        i++;             //给一定时间让总线释放
+        b = DS18B20_pin; //读取数据
+        i = 8;
+        while (i > 0)
+            i--; //延时至少60us
+        i_b = b;
+        rdbyte = (i_b << 7) | (rdbyte >> 1); //将读取到得一位值左移7位，存放读取的数据变量rdbyte右移1位
+    }
+    return rdbyte;
+}
+
+void DS18B20_Read_id()
+{
+    int_ds18b20();  //初始化，复位并获取应答信号
+    Write_DS18B20(0xf0);  //读取id
+    ds_id[0] = '0' + Read_DS18B20();  //读取8位
+    ds_id[1] = '0' + Read_DS18B20();  //读取8位
+    ds_id[2] = '0' + Read_DS18B20();  //读取8位
+    ds_id[3] = '0' + Read_DS18B20();  //读取8位
+    ds_id[4] = '0' + Read_DS18B20();  //读取8位
+    ds_id[5] = '0' + Read_DS18B20();  //读取8位
+    ds_id[6] = '0' + Read_DS18B20();  //读取8位
+    ds_id[7] = '0' + Read_DS18B20();  //读取8位
+}
+//docker run -d -p 9000:9000 -v /var/run/docker.sock:/var/run/docker.sock -v portainer_data:/data -v /file/portainer_web:/public portainer/portainer:1.20.2
+
+uint DS18B20_Read_tem()
+{
+    uchar high, low;
+    uint temp;
+    float f_temp;
+
+    int_ds18b20();  //初始化，复位并获取应答信号
+    Write_DS18B20(0xcc);  //跳过ROM
+    Write_DS18B20(0x44);  //开始温度转换
+    delay(1000); //等待温度转换完成
+
+    int_ds18b20(); //将DS18B20复位
+    Write_DS18B20(0xcc); //跳过ROM
+    Write_DS18B20(0xbe); //读暂存器
+
+    low = Read_DS18B20();  //读取低8位
+    high = Read_DS18B20(); //读取高8位
+    temp = high;
+
+    temp <<= 8;
+    temp = temp | low;        //将读取的低8位和高8位合并
+
+    f_temp = temp * 0.0625;   //温度在寄存器中为12位 分辨率位0.0625°
+    temp = f_temp * 10 + 0.5; //精确到十分位，四舍五入
+    return temp;
+}

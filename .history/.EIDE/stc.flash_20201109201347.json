@@ -1,0 +1,7 @@
+{
+    "device": "auto",
+    "baudrate": "115200",
+    "option": {
+        "bsl_pindetect_enabled": "false"
+    }
+}
